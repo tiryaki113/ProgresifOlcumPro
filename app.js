@@ -50,7 +50,7 @@ async function detectPupils(){
 $("detect").onclick=detectPupils;
 
 function resize(){if(!img)return;const w=canvas.clientWidth||800;fitScale=w/img.width;viewW=w;viewH=img.height*fitScale;const dpr=window.devicePixelRatio||1;canvas.width=w*dpr;canvas.height=viewH*dpr;canvas.style.height=viewH+"px";ctx.setTransform(dpr,0,0,dpr,0,0);draw();}
-function draw(){if(!img)return;ctx.clearRect(0,0,viewW,viewH);ctx.save();ctx.translate(viewW/2+pan.x,viewH/2+pan.y);ctx.scale(zoom,zoom);ctx.translate(-viewW/2,-viewH/2);ctx.drawImage(img,0,0,viewW,viewH);pts.forEach((p,i)=>{let x=p.x*fitScale,y=p.y*fitScale;let r=4.5;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle="rgba(60,220,200,.13)";ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=i===4?"#48e3ce":"#ffcb65";ctx.stroke();ctx.beginPath();ctx.moveTo(x-3,y);ctx.lineTo(x+3,y);ctx.moveTo(x,y-3);ctx.lineTo(x,y+3);ctx.stroke();ctx.fillStyle="#fff";ctx.font="11px system-ui";ctx.fillText(String(i+1),x+6,y-5);});ctx.restore();update();}
+function draw(){if(!img)return;ctx.clearRect(0,0,viewW,viewH);ctx.save();ctx.translate(viewW/2+pan.x,viewH/2+pan.y);ctx.scale(zoom,zoom);ctx.translate(-viewW/2,-viewH/2);ctx.drawImage(img,0,0,viewW,viewH);pts.forEach((p,i)=>{let x=p.x*fitScale,y=p.y*fitScale;let r=3.8;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle="rgba(60,220,200,.13)";ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=i===4?"#48e3ce":"#ffcb65";ctx.stroke();ctx.beginPath();ctx.moveTo(x-3,y);ctx.lineTo(x+3,y);ctx.moveTo(x,y-3);ctx.lineTo(x,y+3);ctx.stroke();ctx.fillStyle="#fff";ctx.font="11px system-ui";ctx.fillText(String(i+1),x+6,y-5);});ctx.restore();update();}
 function screenToImage(e){const r=canvas.getBoundingClientRect();let x=e.clientX-r.left,y=e.clientY-r.top;x=(x-viewW/2-pan.x)/zoom+viewW/2;y=(y-viewH/2-pan.y)/zoom+viewH/2;return{x:x/fitScale,y:y/fitScale};}
 function update(){$("step").textContent=`Adım ${pts.length+1} / 9`; $("instruction").textContent=pts.length<9?names[pts.length]:"Tüm noktalar işaretlendi. Hesaplayabilirsiniz."; $("calculate").disabled=pts.length!==9;$("undo").disabled=!pts.length;$("zoomlabel").textContent=`Yakınlaştırma ${Math.round(zoom*100)}%`;}
 let activePointers=new Map(), pinchStart=null, movedPointer=false, pressTimer=null, longPressed=false, startPoint=null, panStart=null;
@@ -75,9 +75,7 @@ canvas.addEventListener("pointerdown",e=>{
  }else{
    // Empty image: long press adds a marker; short drag pans the photo.
    panStart={x:e.clientX,y:e.clientY,base:{...pan}};
-   // Holding arms the gesture. If the finger then moves, pan the photo.
-   // If the user releases without moving, add a point on long press.
-   pressTimer=setTimeout(()=>{longPressed=true;pressTimer=null;},450);
+   // A simple tap adds a point on release; moving the finger pans the photo.
  }
 });
 canvas.addEventListener("pointermove",e=>{
@@ -102,7 +100,7 @@ function finishPointer(e){
  clearTimeout(pressTimer);pressTimer=null;
  activePointers.delete(e.pointerId);
  if(pinchStart){if(activePointers.size<2)pinchStart=null;pointerStart=null;drag=-1;panStart=null;return;}
- if(drag<0&&longPressed&&!movedPointer&&startPoint&&pts.length<9){
+ if(drag<0&&!movedPointer&&startPoint&&pts.length<9){
    pts.push({x:clamp(startPoint.x,0,img.width),y:clamp(startPoint.y,0,img.height)});
  }
  pointerStart=null;drag=-1;panStart=null;movedPointer=false;longPressed=false;startPoint=null;draw();
