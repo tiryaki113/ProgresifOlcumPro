@@ -8,12 +8,12 @@
 </section>
 <section id="work" class="panel hidden">
 <div class="row between"><div><h2>Ölçüm noktalarını işaretle</h2><small id="step">Adım 1 / 9</small></div><button id="reset" class="btn danger">Sıfırla</button></div>
-<p id="instruction">Üst sol dış referans noktasının merkezini seçin.</p>
+<p id="instruction">Üst sol dış referans noktasının merkezini seçin.</p><div class="actions"><button id="detect" class="btn ai" disabled>✨ Göz bebeklerini otomatik bul</button></div><div id="cameraCheck" class="camera-check">Fotoğrafı seçtikten sonra yüz ve çekim hizası ön kontrolü yapılabilir.</div>
 <div class="canvas-wrap"><canvas id="view"></canvas></div>
 <div class="zoomrow"><button id="minus" class="btn">−</button><span id="zoomlabel">Yakınlaştırma 100%</span><button id="plus" class="btn">+</button><button id="fit" class="btn">Sığdır</button></div>
 <div class="actions"><button id="undo" class="btn">Son noktayı geri al</button><button id="calculate" class="btn primary" disabled>Ölçümü hesapla</button></div>
 <div class="hint">Yeni nokta eklemek için fotoğrafa dokunun. Var olan noktayı taşımak için üzerine basılı tutup sürükleyin. İki parmakla yakınlaştırabilirsiniz.</div>
 </section>
 <section id="results" class="panel hidden"><h2>Ölçüm sonuçları</h2><div id="values" class="results"></div><p class="warning">Bu uygulama klinik doğruluk veya sıfır hata garantisi vermez. Aparat ve gözler arasındaki derinlik farkı, kamera açısı, baş pozisyonu ve nokta seçimi paralaks hatası oluşturabilir. Cam siparişinden önce fiziksel pupilometre/ölçüm cihazıyla doğrulayın.</p><button id="edit" class="btn">Noktaları düzenle</button></section>
-<section class="panel info"><h2>İşaretleme sırası</h2><ol><li>Üst sol dış referans</li><li>Üst sağ dış referans</li><li>Alt sol dış referans</li><li>Alt sağ dış referans</li><li>Aparatın üst orta dairesel merkez işareti</li><li>Kişinin sağ göz bebeği merkezi (fotoğrafın solu)</li><li>Kişinin sol göz bebeği merkezi (fotoğrafın sağı)</li><li>Sağ cam alt kenarı, göz bebeğinin tam altı</li><li>Sol cam alt kenarı, göz bebeğinin tam altı</li></ol><p>Kalibrasyon: yatay 170 mm, dikey 60 mm. Ölçüm manuel nokta işaretlemeye dayanır; otomatik göz algılama yoktur.</p></section>
+<section class="panel info"><h2>İşaretleme sırası</h2><ol><li>Üst sol dış referans</li><li>Üst sağ dış referans</li><li>Alt sol dış referans</li><li>Alt sağ dış referans</li><li>Aparatın üst orta dairesel merkez işareti</li><li>Kişinin sağ göz bebeği merkezi (fotoğrafın solu)</li><li>Kişinin sol göz bebeği merkezi (fotoğrafın sağı)</li><li>Sağ cam alt kenarı, göz bebeğinin tam altı</li><li>Sol cam alt kenarı, göz bebeğinin tam altı</li></ol><p>Kalibrasyon: yatay 170 mm, dikey 60 mm. Otomatik iris merkezi tespiti desteklenir; tespitler manuel kontrol edilmelidir.</p></section>
 </main><footer>ProgresifOlcumPro • Ölçüm yardımcısı</footer><script src="app.js"></script></body></html>

@@ -1,8 +1,54 @@
 const $=id=>document.getElementById(id);
 const names=["Üst sol dış referans noktasının merkezi","Üst sağ dış referans noktasının merkezi","Alt sol dış referans noktasının merkezi","Alt sağ dış referans noktasının merkezi","Aparatın üst orta dairesel merkez işareti","Kişinin SAĞ göz bebeğinin merkezi (fotoğrafın solu)","Kişinin SOL göz bebeğinin merkezi (fotoğrafın sağı)","SAĞ camın alt kenarı, göz bebeğinin tam altı","SOL camın alt kenarı, göz bebeğinin tam altı"];
 const canvas=$("view"),ctx=canvas.getContext("2d");let img=null,pts=[],zoom=1,pan={x:0,y:0},drag=-1,pointerStart=null,lastPinch=null,fitScale=1,viewW=0,viewH=0;
-function load(file){if(!file)return;const u=URL.createObjectURL(file);const im=new Image();im.onload=()=>{img=im;pts=[];zoom=1;pan={x:0,y:0};$("work").classList.remove("hidden");$("results").classList.add("hidden");resize();};im.src=u;}
+function load(file){if(!file)return;const u=URL.createObjectURL(file);const im=new Image();im.onload=()=>{img=im;pts=[];zoom=1;pan={x:0,y:0};$("work").classList.remove("hidden");$("results").classList.add("hidden");resize();$("detect").disabled=false;$("cameraCheck").textContent="Fotoğraf yüklendi. Önce dört köşe ve üst orta referans noktasını manuel işaretleyin; ardından otomatik iris tespitini çalıştırın."};im.src=u;}
 $("camera").onchange=e=>load(e.target.files[0]);$("gallery").onchange=e=>load(e.target.files[0]);
+
+let faceTask=null, visionFileset=null;
+async function detectPupils(){
+  const button=$("detect"),status=$("cameraCheck");
+  if(!img)return;
+  button.disabled=true;button.textContent="Yüz analiz ediliyor…";
+  status.className="camera-check";status.textContent="Yüz ve iris noktaları aranıyor. Fotoğraf cihazda işleniyor.";
+  try{
+    if(!faceTask){
+      const vision=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm");
+      visionFileset=await vision.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+      faceTask=await vision.FaceLandmarker.createFromOptions(visionFileset,{
+        baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",delegate:"CPU"},
+        runningMode:"IMAGE",numFaces:1,
+        outputFaceBlendshapes:false,outputFacialTransformationMatrixes:false
+      });
+    }
+    const result=faceTask.detect(img);
+    if(!result.faceLandmarks||!result.faceLandmarks.length)throw Error("Yüz bulunamadı. Yüz kameraya dönük, net ve yeterince aydınlık olsun.");
+    const lm=result.faceLandmarks[0];
+    if(lm.length<478)throw Error("İris noktaları algılanamadı. Gözlük camındaki yansıma veya bulanıklık engel olmuş olabilir.");
+    const center=ids=>({x:ids.reduce((a,i)=>a+lm[i].x,0)/ids.length*img.width,y:ids.reduce((a,i)=>a+lm[i].y,0)/ids.length*img.height});
+    const right=center([468,469,470,471,472]),left=center([473,474,475,476,477]);
+    // Image-left iris is the patient's right eye.
+    if(pts.length<5)throw Error("Önce dört köşe referansını ve üst orta merkez işaretini manuel işaretleyin.");
+    pts[5]=right;pts[6]=left;
+    const eyeMid={x:(lm[33].x+lm[263].x)/2,y:(lm[33].y+lm[263].y)/2};
+    const eyeDx=(lm[263].x-lm[33].x)*img.width;
+    const eyeDy=(lm[263].y-lm[33].y)*img.height;
+    const roll=Math.abs(Math.atan2(eyeDy,eyeDx)*180/Math.PI);
+    const eyeSpan=Math.max(1,Math.abs(eyeDx));
+    const yawOffset=Math.abs((lm[1].x-eyeMid.x)*img.width)/eyeSpan;
+    let messages=[];
+    if(roll>4)messages.push(`Baş eğikliği yaklaşık ${roll.toFixed(1)}°: başı düz tutarak yeniden çekin.`);
+    if(yawOffset>0.09)messages.push("Yüz tam karşıya dönük görünmüyor; kişiyi kameraya tam karşı çevirin.");
+    if(roll<=4&&yawOffset<=0.09)messages.push("Yüzün yatay hizası ve karşıya bakışı uygun görünüyor.");
+    messages.push("Bu yalnızca 2B yüz hizası ön kontrolüdür; kamera yüksekliği/derinlik kaynaklı paralaksı ölçmez.");
+    status.className="camera-check "+(roll>4||yawOffset>0.09?"warn":"good");
+    status.textContent=messages.join(" ");
+    draw();update();
+  }catch(e){
+    status.className="camera-check bad";status.textContent=e.message||"Otomatik göz tespiti başarısız.";
+  }finally{button.disabled=false;button.textContent="✨ Göz bebeklerini otomatik bul";}
+}
+$("detect").onclick=detectPupils;
+
 function resize(){if(!img)return;const w=canvas.clientWidth||800;fitScale=w/img.width;viewW=w;viewH=img.height*fitScale;const dpr=window.devicePixelRatio||1;canvas.width=w*dpr;canvas.height=viewH*dpr;canvas.style.height=viewH+"px";ctx.setTransform(dpr,0,0,dpr,0,0);draw();}
 function draw(){if(!img)return;ctx.clearRect(0,0,viewW,viewH);ctx.save();ctx.translate(viewW/2+pan.x,viewH/2+pan.y);ctx.scale(zoom,zoom);ctx.translate(-viewW/2,-viewH/2);ctx.drawImage(img,0,0,viewW,viewH);pts.forEach((p,i)=>{let x=p.x*fitScale,y=p.y*fitScale;let r=8;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle="rgba(60,220,200,.13)";ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=i===4?"#48e3ce":"#ffcb65";ctx.stroke();ctx.beginPath();ctx.moveTo(x-3,y);ctx.lineTo(x+3,y);ctx.moveTo(x,y-3);ctx.lineTo(x,y+3);ctx.stroke();ctx.fillStyle="#fff";ctx.font="11px system-ui";ctx.fillText(String(i+1),x+10,y-9);});ctx.restore();update();}
 function screenToImage(e){const r=canvas.getBoundingClientRect();let x=e.clientX-r.left,y=e.clientY-r.top;x=(x-viewW/2-pan.x)/zoom+viewW/2;y=(y-viewH/2-pan.y)/zoom+viewH/2;return{x:x/fitScale,y:y/fitScale};}
