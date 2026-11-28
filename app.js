@@ -50,13 +50,50 @@ async function detectPupils(){
 $("detect").onclick=detectPupils;
 
 function resize(){if(!img)return;const w=canvas.clientWidth||800;fitScale=w/img.width;viewW=w;viewH=img.height*fitScale;const dpr=window.devicePixelRatio||1;canvas.width=w*dpr;canvas.height=viewH*dpr;canvas.style.height=viewH+"px";ctx.setTransform(dpr,0,0,dpr,0,0);draw();}
-function draw(){if(!img)return;ctx.clearRect(0,0,viewW,viewH);ctx.save();ctx.translate(viewW/2+pan.x,viewH/2+pan.y);ctx.scale(zoom,zoom);ctx.translate(-viewW/2,-viewH/2);ctx.drawImage(img,0,0,viewW,viewH);pts.forEach((p,i)=>{let x=p.x*fitScale,y=p.y*fitScale;let r=8;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle="rgba(60,220,200,.13)";ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=i===4?"#48e3ce":"#ffcb65";ctx.stroke();ctx.beginPath();ctx.moveTo(x-3,y);ctx.lineTo(x+3,y);ctx.moveTo(x,y-3);ctx.lineTo(x,y+3);ctx.stroke();ctx.fillStyle="#fff";ctx.font="11px system-ui";ctx.fillText(String(i+1),x+10,y-9);});ctx.restore();update();}
+function draw(){if(!img)return;ctx.clearRect(0,0,viewW,viewH);ctx.save();ctx.translate(viewW/2+pan.x,viewH/2+pan.y);ctx.scale(zoom,zoom);ctx.translate(-viewW/2,-viewH/2);ctx.drawImage(img,0,0,viewW,viewH);pts.forEach((p,i)=>{let x=p.x*fitScale,y=p.y*fitScale;let r=4.5;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle="rgba(60,220,200,.13)";ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=i===4?"#48e3ce":"#ffcb65";ctx.stroke();ctx.beginPath();ctx.moveTo(x-3,y);ctx.lineTo(x+3,y);ctx.moveTo(x,y-3);ctx.lineTo(x,y+3);ctx.stroke();ctx.fillStyle="#fff";ctx.font="11px system-ui";ctx.fillText(String(i+1),x+6,y-5);});ctx.restore();update();}
 function screenToImage(e){const r=canvas.getBoundingClientRect();let x=e.clientX-r.left,y=e.clientY-r.top;x=(x-viewW/2-pan.x)/zoom+viewW/2;y=(y-viewH/2-pan.y)/zoom+viewH/2;return{x:x/fitScale,y:y/fitScale};}
 function update(){$("step").textContent=`Adım ${pts.length+1} / 9`; $("instruction").textContent=pts.length<9?names[pts.length]:"Tüm noktalar işaretlendi. Hesaplayabilirsiniz."; $("calculate").disabled=pts.length!==9;$("undo").disabled=!pts.length;$("zoomlabel").textContent=`Yakınlaştırma ${Math.round(zoom*100)}%`;}
-canvas.addEventListener("pointerdown",e=>{if(!img)return;canvas.setPointerCapture(e.pointerId);pointerStart={x:e.clientX,y:e.clientY,t:Date.now()};const p=screenToImage(e);const near=pts.map((q,i)=>({i,d:Math.hypot(q.x-p.x,q.y-p.y)})).filter(q=>q.d*fitScale*zoom<22).sort((a,b)=>a.d-b.d)[0];drag=near?near.i:-1;});
-canvas.addEventListener("pointermove",e=>{if(drag>=0&&e.buttons){let p=screenToImage(e);pts[drag]={x:clamp(p.x,0,img.width),y:clamp(p.y,0,img.height)};draw();}});
-canvas.addEventListener("pointerup",e=>{if(!pointerStart)return;if(drag<0&&Date.now()-pointerStart.t<450&&pts.length<9){let p=screenToImage(e);pts.push({x:clamp(p.x,0,img.width),y:clamp(p.y,0,img.height)});}drag=-1;pointerStart=null;draw();});
-canvas.addEventListener("pointercancel",()=>{drag=-1;pointerStart=null;});
+let activePointers=new Map(), pinchStart=null, movedPointer=false;
+canvas.addEventListener("pointerdown",e=>{
+ if(!img)return;
+ canvas.setPointerCapture(e.pointerId);
+ activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(activePointers.size===2){
+   const a=[...activePointers.values()];
+   pinchStart={dist:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),zoom,pan:{...pan}};
+   drag=-1;pointerStart=null;return;
+ }
+ if(activePointers.size>2)return;
+ pointerStart={x:e.clientX,y:e.clientY,t:Date.now()};movedPointer=false;
+ const p=screenToImage(e);
+ const near=pts.map((q,i)=>({i,d:Math.hypot(q.x-p.x,q.y-p.y)})).filter(q=>q.d*fitScale*zoom<14).sort((a,b)=>a.d-b.d)[0];
+ drag=near?near.i:-1;
+});
+canvas.addEventListener("pointermove",e=>{
+ if(!activePointers.has(e.pointerId))return;
+ activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(activePointers.size===2&&pinchStart){
+   const a=[...activePointers.values()];
+   const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+   zoom=clamp(pinchStart.zoom*d/Math.max(1,pinchStart.dist),1,8);
+   $("zoomlabel").textContent=`Yakınlaştırma ${Math.round(zoom*100)}%`;
+   draw();return;
+ }
+ if(drag>=0&&e.buttons){
+   movedPointer=true;let p=screenToImage(e);
+   pts[drag]={x:clamp(p.x,0,img.width),y:clamp(p.y,0,img.height)};draw();
+ }
+});
+function finishPointer(e){
+ activePointers.delete(e.pointerId);
+ if(pinchStart){if(activePointers.size<2)pinchStart=null;pointerStart=null;drag=-1;return;}
+ if(pointerStart&&!movedPointer&&drag<0&&Date.now()-pointerStart.t<450&&pts.length<9){
+   let p=screenToImage(e);pts.push({x:clamp(p.x,0,img.width),y:clamp(p.y,0,img.height)});
+ }
+ drag=-1;pointerStart=null;movedPointer=false;draw();
+}
+canvas.addEventListener("pointerup",finishPointer);
+canvas.addEventListener("pointercancel",e=>{activePointers.delete(e.pointerId);pinchStart=null;drag=-1;pointerStart=null;});
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 $("plus").onclick=()=>{zoom=Math.min(zoom*1.25,8);draw();};$("minus").onclick=()=>{zoom=Math.max(zoom/1.25,1);if(zoom===1)pan={x:0,y:0};draw();};$("fit").onclick=()=>{zoom=1;pan={x:0,y:0};draw();};
 $("undo").onclick=()=>{pts.pop();$("results").classList.add("hidden");draw();};$("reset").onclick=()=>{pts=[];zoom=1;pan={x:0,y:0};$("results").classList.add("hidden");draw();};
