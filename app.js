@@ -94,6 +94,32 @@ function finishPointer(e){
 }
 canvas.addEventListener("pointerup",finishPointer);
 canvas.addEventListener("pointercancel",e=>{activePointers.delete(e.pointerId);pinchStart=null;drag=-1;pointerStart=null;});
+
+// Explicit touch handlers for mobile Safari/Chrome pinch zoom.
+// Pointer events remain responsible for single-finger point placement and dragging.
+let touchPinchStart=null;
+canvas.addEventListener("touchstart",e=>{
+ if(e.touches.length===2){
+   e.preventDefault();
+   const a=e.touches[0],b=e.touches[1];
+   touchPinchStart={dist:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),zoom};
+   drag=-1;pointerStart=null;
+ }
+},{passive:false});
+canvas.addEventListener("touchmove",e=>{
+ if(e.touches.length===2&&touchPinchStart){
+   e.preventDefault();
+   const a=e.touches[0],b=e.touches[1];
+   const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+   zoom=clamp(touchPinchStart.zoom*d/Math.max(1,touchPinchStart.dist),1,8);
+   $("zoomlabel").textContent=`Yakınlaştırma ${Math.round(zoom*100)}%`;
+   draw();
+ }
+},{passive:false});
+function endTouchPinch(e){if(e.touches.length<2)touchPinchStart=null;}
+canvas.addEventListener("touchend",endTouchPinch,{passive:true});
+canvas.addEventListener("touchcancel",()=>{touchPinchStart=null;},{passive:true});
+
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 $("plus").onclick=()=>{zoom=Math.min(zoom*1.25,8);draw();};$("minus").onclick=()=>{zoom=Math.max(zoom/1.25,1);if(zoom===1)pan={x:0,y:0};draw();};$("fit").onclick=()=>{zoom=1;pan={x:0,y:0};draw();};
 $("undo").onclick=()=>{pts.pop();$("results").classList.add("hidden");draw();};$("reset").onclick=()=>{pts=[];zoom=1;pan={x:0,y:0};$("results").classList.add("hidden");draw();};
