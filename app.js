@@ -53,21 +53,36 @@ function resize(){if(!img)return;const w=canvas.clientWidth||800;fitScale=w/img.
 function draw(){if(!img)return;ctx.clearRect(0,0,viewW,viewH);ctx.save();ctx.translate(viewW/2+pan.x,viewH/2+pan.y);ctx.scale(zoom,zoom);ctx.translate(-viewW/2,-viewH/2);ctx.drawImage(img,0,0,viewW,viewH);pts.forEach((p,i)=>{let x=p.x*fitScale,y=p.y*fitScale;let r=4.5;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle="rgba(60,220,200,.13)";ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=i===4?"#48e3ce":"#ffcb65";ctx.stroke();ctx.beginPath();ctx.moveTo(x-3,y);ctx.lineTo(x+3,y);ctx.moveTo(x,y-3);ctx.lineTo(x,y+3);ctx.stroke();ctx.fillStyle="#fff";ctx.font="11px system-ui";ctx.fillText(String(i+1),x+6,y-5);});ctx.restore();update();}
 function screenToImage(e){const r=canvas.getBoundingClientRect();let x=e.clientX-r.left,y=e.clientY-r.top;x=(x-viewW/2-pan.x)/zoom+viewW/2;y=(y-viewH/2-pan.y)/zoom+viewH/2;return{x:x/fitScale,y:y/fitScale};}
 function update(){$("step").textContent=`Adım ${pts.length+1} / 9`; $("instruction").textContent=pts.length<9?names[pts.length]:"Tüm noktalar işaretlendi. Hesaplayabilirsiniz."; $("calculate").disabled=pts.length!==9;$("undo").disabled=!pts.length;$("zoomlabel").textContent=`Yakınlaştırma ${Math.round(zoom*100)}%`;}
-let activePointers=new Map(), pinchStart=null, movedPointer=false;
+let activePointers=new Map(), pinchStart=null, movedPointer=false, pressTimer=null, longPressed=false, startPoint=null, panStart=null;
 canvas.addEventListener("pointerdown",e=>{
  if(!img)return;
  canvas.setPointerCapture(e.pointerId);
  activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(activePointers.size===2){
+   clearTimeout(pressTimer);pressTimer=null;
    const a=[...activePointers.values()];
    pinchStart={dist:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),zoom,pan:{...pan}};
-   drag=-1;pointerStart=null;return;
+   drag=-1;pointerStart=null;panStart=null;return;
  }
  if(activePointers.size>2)return;
- pointerStart={x:e.clientX,y:e.clientY,t:Date.now()};movedPointer=false;
- const p=screenToImage(e);
- const near=pts.map((q,i)=>({i,d:Math.hypot(q.x-p.x,q.y-p.y)})).filter(q=>q.d*fitScale*zoom<14).sort((a,b)=>a.d-b.d)[0];
+ pointerStart={x:e.clientX,y:e.clientY,t:Date.now()};movedPointer=false;longPressed=false;
+ const p=screenToImage(e);startPoint=p;
+ const near=pts.map((q,i)=>({i,d:Math.hypot(q.x-p.x,q.y-p.y)})).filter(q=>q.d*fitScale*zoom<16).sort((a,b)=>a.d-b.d)[0];
  drag=near?near.i:-1;
+ if(drag>=0){
+   // Existing point: hold and drag to reposition it.
+   pressTimer=setTimeout(()=>{longPressed=true;pressTimer=null;},350);
+ }else{
+   // Empty image: long press adds a marker; short drag pans the photo.
+   panStart={x:e.clientX,y:e.clientY,base:{...pan}};
+   pressTimer=setTimeout(()=>{
+     if(activePointers.size===1&&!movedPointer&&pts.length<9){
+       pts.push({x:clamp(startPoint.x,0,img.width),y:clamp(startPoint.y,0,img.height)});
+       longPressed=true;draw();
+     }
+     pressTimer=null;
+   },450);
+ }
 });
 canvas.addEventListener("pointermove",e=>{
  if(!activePointers.has(e.pointerId))return;
@@ -76,52 +91,29 @@ canvas.addEventListener("pointermove",e=>{
    const a=[...activePointers.values()];
    const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
    zoom=clamp(pinchStart.zoom*d/Math.max(1,pinchStart.dist),1,8);
-   $("zoomlabel").textContent=`Yakınlaştırma ${Math.round(zoom*100)}%`;
-   draw();return;
+   $("zoomlabel").textContent=`Yakınlaştırma ${Math.round(zoom*100)}%`;draw();return;
  }
- if(drag>=0&&e.buttons){
-   movedPointer=true;let p=screenToImage(e);
-   pts[drag]={x:clamp(p.x,0,img.width),y:clamp(p.y,0,img.height)};draw();
+ if(!pointerStart)return;
+ const dx=e.clientX-pointerStart.x,dy=e.clientY-pointerStart.y;
+ if(Math.hypot(dx,dy)>8){movedPointer=true;clearTimeout(pressTimer);pressTimer=null;}
+ if(drag>=0&&movedPointer){
+   let p=screenToImage(e);pts[drag]={x:clamp(p.x,0,img.width),y:clamp(p.y,0,img.height)};draw();
+ }else if(drag<0&&panStart&&movedPointer){
+   pan={x:panStart.base.x+dx,y:panStart.base.y+dy};draw();
  }
 });
 function finishPointer(e){
+ clearTimeout(pressTimer);pressTimer=null;
  activePointers.delete(e.pointerId);
- if(pinchStart){if(activePointers.size<2)pinchStart=null;pointerStart=null;drag=-1;return;}
- if(pointerStart&&!movedPointer&&drag<0&&Date.now()-pointerStart.t<450&&pts.length<9){
-   let p=screenToImage(e);pts.push({x:clamp(p.x,0,img.width),y:clamp(p.y,0,img.height)});
- }
- drag=-1;pointerStart=null;movedPointer=false;draw();
+ if(pinchStart){if(activePointers.size<2)pinchStart=null;pointerStart=null;drag=-1;panStart=null;return;}
+ pointerStart=null;drag=-1;panStart=null;movedPointer=false;longPressed=false;draw();
 }
 canvas.addEventListener("pointerup",finishPointer);
-canvas.addEventListener("pointercancel",e=>{activePointers.delete(e.pointerId);pinchStart=null;drag=-1;pointerStart=null;});
-
-// Explicit touch handlers for mobile Safari/Chrome pinch zoom.
-// Pointer events remain responsible for single-finger point placement and dragging.
-let touchPinchStart=null;
-canvas.addEventListener("touchstart",e=>{
- if(e.touches.length===2){
-   e.preventDefault();
-   const a=e.touches[0],b=e.touches[1];
-   touchPinchStart={dist:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),zoom};
-   drag=-1;pointerStart=null;
- }
-},{passive:false});
-canvas.addEventListener("touchmove",e=>{
- if(e.touches.length===2&&touchPinchStart){
-   e.preventDefault();
-   const a=e.touches[0],b=e.touches[1];
-   const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
-   zoom=clamp(touchPinchStart.zoom*d/Math.max(1,touchPinchStart.dist),1,8);
-   $("zoomlabel").textContent=`Yakınlaştırma ${Math.round(zoom*100)}%`;
-   draw();
- }
-},{passive:false});
-function endTouchPinch(e){if(e.touches.length<2)touchPinchStart=null;}
-canvas.addEventListener("touchend",endTouchPinch,{passive:true});
-canvas.addEventListener("touchcancel",()=>{touchPinchStart=null;},{passive:true});
-
+canvas.addEventListener("pointercancel",e=>{clearTimeout(pressTimer);pressTimer=null;activePointers.delete(e.pointerId);pinchStart=null;drag=-1;pointerStart=null;panStart=null;});
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 $("plus").onclick=()=>{zoom=Math.min(zoom*1.25,8);draw();};$("minus").onclick=()=>{zoom=Math.max(zoom/1.25,1);if(zoom===1)pan={x:0,y:0};draw();};$("fit").onclick=()=>{zoom=1;pan={x:0,y:0};draw();};
+function movePhoto(dx,dy){if(!img)return;const step=zoom>1?36:24;pan={x:pan.x+dx*step,y:pan.y+dy*step};draw();}
+$("panUp").onclick=()=>movePhoto(0,-1);$("panDown").onclick=()=>movePhoto(0,1);$("panLeft").onclick=()=>movePhoto(-1,0);$("panRight").onclick=()=>movePhoto(1,0);
 $("undo").onclick=()=>{pts.pop();$("results").classList.add("hidden");draw();};$("reset").onclick=()=>{pts=[];zoom=1;pan={x:0,y:0};$("results").classList.add("hidden");draw();};
 function homography(src,dst){let a=Array.from({length:8},()=>Array(9).fill(0));for(let i=0;i<4;i++){let{x,y}=src[i],{x:u,y:v}=dst[i],r=2*i;a[r][0]=x;a[r][1]=y;a[r][2]=1;a[r][6]=-u*x;a[r][7]=-u*y;a[r][8]=u;a[r+1][3]=x;a[r+1][4]=y;a[r+1][5]=1;a[r+1][6]=-v*x;a[r+1][7]=-v*y;a[r+1][8]=v;}for(let c=0;c<8;c++){let p=c;for(let r=c+1;r<8;r++)if(Math.abs(a[r][c])>Math.abs(a[p][c]))p=r;if(Math.abs(a[p][c])<1e-10)throw Error("Referans noktaları uygun değil; dört merkezi yeniden işaretleyin.");[a[c],a[p]]=[a[p],a[c]];let d=a[c][c];for(let j=c;j<9;j++)a[c][j]/=d;for(let r=0;r<8;r++)if(r!==c){let f=a[r][c];for(let j=c;j<9;j++)a[r][j]-=f*a[c][j];}}return [...a.map((r,i)=>r[8]),1];}
 function project(h,p){let d=h[6]*p.x+h[7]*p.y+1;if(Math.abs(d)<1e-10)throw Error("Perspektif dönüşümü geçersiz.");return{x:(h[0]*p.x+h[1]*p.y+h[2])/d,y:(h[3]*p.x+h[4]*p.y+h[5])/d};}
