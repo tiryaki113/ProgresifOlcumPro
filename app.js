@@ -75,13 +75,9 @@ canvas.addEventListener("pointerdown",e=>{
  }else{
    // Empty image: long press adds a marker; short drag pans the photo.
    panStart={x:e.clientX,y:e.clientY,base:{...pan}};
-   pressTimer=setTimeout(()=>{
-     if(activePointers.size===1&&!movedPointer&&pts.length<9){
-       pts.push({x:clamp(startPoint.x,0,img.width),y:clamp(startPoint.y,0,img.height)});
-       longPressed=true;draw();
-     }
-     pressTimer=null;
-   },450);
+   // Holding arms the gesture. If the finger then moves, pan the photo.
+   // If the user releases without moving, add a point on long press.
+   pressTimer=setTimeout(()=>{longPressed=true;pressTimer=null;},450);
  }
 });
 canvas.addEventListener("pointermove",e=>{
@@ -106,7 +102,10 @@ function finishPointer(e){
  clearTimeout(pressTimer);pressTimer=null;
  activePointers.delete(e.pointerId);
  if(pinchStart){if(activePointers.size<2)pinchStart=null;pointerStart=null;drag=-1;panStart=null;return;}
- pointerStart=null;drag=-1;panStart=null;movedPointer=false;longPressed=false;draw();
+ if(drag<0&&longPressed&&!movedPointer&&startPoint&&pts.length<9){
+   pts.push({x:clamp(startPoint.x,0,img.width),y:clamp(startPoint.y,0,img.height)});
+ }
+ pointerStart=null;drag=-1;panStart=null;movedPointer=false;longPressed=false;startPoint=null;draw();
 }
 canvas.addEventListener("pointerup",finishPointer);
 canvas.addEventListener("pointercancel",e=>{clearTimeout(pressTimer);pressTimer=null;activePointers.delete(e.pointerId);pinchStart=null;drag=-1;pointerStart=null;panStart=null;});
